@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block title %}Parts Catalog | Vehicle Inventory Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Spare Parts Catalog</h2>
+        <p class="text-muted mb-0">Browse SKUs, pricing structures, supplier brands, and network inventory.</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPartModal">
+        <i class="fa-solid fa-plus me-1"></i> Add New Spare Part
+    </button>
+</div>
+
+<!-- Search & Filtering Bar -->
+<div class="card border-0 shadow-sm p-3 mb-4 rounded-3">
+    <form method="GET" action="{{ url_for('parts_catalog') }}" class="row g-2 align-items-center">
+        <div class="col-md-5">
+            <div class="input-group">
+                <span class="input-group-text bg-white border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                <input type="text" name="q" value="{{ search_q }}" class="form-control border-start-0" placeholder="Search by SKU number or Part name...">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select name="category" class="form-select">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat.category_id }}" {% if cat_filter == cat.category_id|string %}selected{% endif %}>{{ cat.category_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="brand" class="form-select">
+                <option value="">All Brands</option>
+                {% for b in brands %}
+                <option value="{{ b.brand_id }}" {% if brand_filter == b.brand_id|string %}selected{% endif %}>{{ b.brand_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-dark w-100">Filter</button>
+            <a href="{{ url_for('parts_catalog') }}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<!-- Parts Table -->
+<div class="card border-0 shadow-sm rounded-3">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Part Number / SKU</th>
+                    <th>Part Description</th>
+                    <th>Category</th>
+                    <th>Manufacturer</th>
+                    <th>Cost Price</th>
+                    <th>Selling Price</th>
+                    <th>Unit Margin</th>
+                    <th>Network Stock</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in parts %}
+                <tr>
+                    <td class="font-monospace fw-bold text-primary">{{ p.part_number }}</td>
+                    <td>
+                        <div class="fw-semibold text-dark">{{ p.part_name }}</div>
+                        <small class="text-muted">{{ p.warranty_months }} mo. warranty &bull; {{ p.unit_of_measure }}</small>
+                    </td>
+                    <td><span class="badge bg-secondary">{{ p.category_name }}</span></td>
+                    <td><span class="badge bg-light text-dark border">{{ p.brand_name }}</span></td>
+                    <td class="text-muted">${{ "%.2f"|format(p.cost_price) }}</td>
+                    <td class="fw-bold text-dark">${{ "%.2f"|format(p.selling_price) }}</td>
+                    <td class="text-success fw-semibold">+${{ "%.2f"|format(p.profit) }}</td>
+                    <td>
+                        <span class="fw-bold {% if p.total_stock <= p.min_stock_level %}text-danger{% else %}text-dark{% endif %}">
+                            {{ p.total_stock }}
+                        </span>
+                        <small class="text-muted">(min: {{ p.min_stock_level }})</small>
+                    </td>
+                    <td>
+                        {% if p.total_stock == 0 %}
+                            <span class="badge bg-danger">OUT OF STOCK</span>
+                        {% elif p.total_stock <= p.min_stock_level %}
+                            <span class="badge badge-low-stock">LOW STOCK</span>
+                        {% else %}
+                            <span class="badge badge-optimal">OPTIMAL</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center py-5 text-muted">
+                        No parts matching search criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Part Modal -->
+<div class="modal fade" id="addPartModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('parts_catalog') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Register New Spare Part</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Part Number (SKU) *</label>
+                        <input type="text" name="part_number" class="form-control" placeholder="e.g. SP-BOS-102" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Part Title / Name *</label>
+                        <input type="text" name="part_name" class="form-control" placeholder="e.g. Bosch Iridium Spark Plug" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Category *</label>
+                        <select name="category_id" class="form-select" required>
+                            {% for c in categories %}
+                            <option value="{{ c.category_id }}">{{ c.category_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Brand / Manufacturer *</label>
+                        <select name="brand_id" class="form-select" required>
+                            {% for b in brands %}
+                            <option value="{{ b.brand_id }}">{{ b.brand_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Cost Price ($) *</label>
+                        <input type="number" step="0.01" name="cost_price" class="form-control" placeholder="0.00" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Selling Price ($) *</label>
+                        <input type="number" step="0.01" name="selling_price" class="form-control" placeholder="0.00" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Unit of Measure</label>
+                        <select name="unit_of_measure" class="form-select">
+                            <option value="PIECE">PIECE</option>
+                            <option value="SET">SET</option>
+                            <option value="CAN">CAN</option>
+                            <option value="PAIR">PAIR</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Min Stock Threshold</label>
+                        <input type="number" name="min_stock_level" value="10" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Max Stock Limit</label>
+                        <input type="number" name="max_stock_level" value="100" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Warranty (Months)</label>
+                        <input type="number" name="warranty_months" value="12" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save to Catalog</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
