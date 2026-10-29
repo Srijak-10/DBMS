@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}Create Sales Order & Invoicing | Vehicle Inventory Management{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2 class="fw-bold mb-1">Point-of-Sale & Invoicing</h2>
+    <p class="text-muted mb-0">Generate a new sales order with customer discount calculation, automatic 18% GST, and immediate inventory deduction.</p>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm p-4 rounded-3 bg-white">
+            <h5 class="fw-bold mb-3 border-bottom pb-2">Invoice Order Details</h5>
+            <form method="POST" action="{{ url_for('billing') }}" id="orderForm">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Customer Account *</label>
+                        <select name="customer_id" id="customer_select" class="form-select" required>
+                            <option value="">-- Choose Customer --</option>
+                            {% for c in customers %}
+                            <option value="{{ c.customer_id }}" data-discount="{{ c.discount_percentage }}">
+                                {{ c.full_name }} ({{ c.customer_type }}) - {{ c.discount_percentage }}% Disc
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Fulfillment Warehouse *</label>
+                        <select name="warehouse_id" class="form-select" required>
+                            {% for wh in warehouses %}
+                            <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label class="form-label fw-semibold">Select Spare Part *</label>
+                        <select name="part_id" id="part_select" class="form-select" required>
+                            <option value="">-- Choose Part from In-Stock Catalog --</option>
+                            {% for p in parts %}
+                            <option value="{{ p.part_id }}" data-price="{{ p.selling_price }}">
+                                {{ p.part_name }} (SKU: {{ p.part_number }}) - ${{ "%.2f"|format(p.selling_price) }} [Available: {{ p.total_stock }}]
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Quantity *</label>
+                        <input type="number" name="quantity" id="qty_input" class="form-control" value="1" min="1" required>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Payment Method</label>
+                        <select name="payment_method" class="form-select">
+                            <option value="CASH">Cash</option>
+                            <option value="UPI">UPI / Digital Payment</option>
+                            <option value="CREDIT_CARD">Credit / Debit Card</option>
+                            <option value="BANK_TRANSFER">Bank Transfer (NEFT/RTGS)</option>
+                            <option value="CHEQUE">Cheque</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Remarks / Vehicle Reg No.</label>
+                        <input type="text" name="remarks" class="form-control" placeholder="e.g. DL-01-AB-1234 Maintenance">
+                    </div>
+
+                    <div class="col-12 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                            <i class="fa-solid fa-file-invoice-dollar me-2"></i> Confirm Order & Dispatch Stock
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Live Cost Estimation Widget -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm rounded-3 bg-white p-4">
+            <h5 class="fw-bold mb-3 border-bottom pb-2">Order Summary</h5>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Unit Retail Price:</span>
+                <span class="fw-bold" id="disp_unit_price">$0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Quantity:</span>
+                <span class="fw-bold" id="disp_qty">1</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Gross Amount:</span>
+                <span class="fw-bold" id="disp_gross">$0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2 text-danger">
+                <span>Customer Discount:</span>
+                <span class="fw-bold" id="disp_discount">-$0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2 text-info">
+                <span>Tax (18% GST):</span>
+                <span class="fw-bold" id="disp_tax">+$0.00</span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="fs-5 fw-bold text-dark">Grand Total:</span>
+                <span class="fs-4 fw-bold text-success" id="disp_grand_total">$0.00</span>
+            </div>
+            <div class="small text-muted bg-light p-2 rounded border">
+                <i class="fa-solid fa-shield-halved text-success me-1"></i> Inventory deduction and immutable audit ledger entries will be written automatically upon confirmation.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateCalculations() {
+        const custSelect = document.getElementById('customer_select');
+        const partSelect = document.getElementById('part_select');
+        const qtyInput = document.getElementById('qty_input');
+
+        const selectedCustOpt = custSelect.options[custSelect.selectedIndex];
+        const selectedPartOpt = partSelect.options[partSelect.selectedIndex];
+
+        const discountPct = selectedCustOpt ? parseFloat(selectedCustOpt.getAttribute('data-discount') || 0) : 0;
+        const unitPrice = selectedPartOpt ? parseFloat(selectedPartOpt.getAttribute('data-price') || 0) : 0;
+        const qty = parseInt(qtyInput.value) || 1;
+
+        const gross = unitPrice * qty;
+        const discountVal = gross * (discountPct / 100.0);
+        const subtotal = gross - discountVal;
+        const tax = subtotal * 0.18;
+        const grandTotal = subtotal + tax;
+
+        document.getElementById('disp_unit_price').innerText = '$' + unitPrice.toFixed(2);
+        document.getElementById('disp_qty').innerText = qty;
+        document.getElementById('disp_gross').innerText = '$' + gross.toFixed(2);
+        document.getElementById('disp_discount').innerText = '-$' + discountVal.toFixed(2) + ' (' + discountPct + '%)';
+        document.getElementById('disp_tax').innerText = '+$' + tax.toFixed(2);
+        document.getElementById('disp_grand_total').innerText = '$' + grandTotal.toFixed(2);
+    }
+
+    document.getElementById('customer_select').addEventListener('change', updateCalculations);
+    document.getElementById('part_select').addEventListener('change', updateCalculations);
+    document.getElementById('qty_input').addEventListener('input', updateCalculations);
+</script>
+{% endblock %}
